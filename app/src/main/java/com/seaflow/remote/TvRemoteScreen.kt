@@ -43,9 +43,16 @@ internal fun TvRemoteScreen(
     nickname: String,
     client: TvRemoteClient,
     status: String,
+    tvHost: String,
+    tvCertificate: String,
     onDisconnect: () -> Unit
 ) {
     val context = LocalContext.current
+    fun voiceServiceIntent() = voiceServiceIntent().apply {
+        putExtra(VoiceListeningService.EXTRA_HOST, tvHost)
+        putExtra(VoiceListeningService.EXTRA_CERT, tvCertificate)
+        putExtra(VoiceListeningService.EXTRA_NICKNAME, nickname)
+    }
     var commandStatus by remember { mutableStateOf("Ready") }
     var listening by remember { mutableStateOf(false) }
     var heardText by remember { mutableStateOf("Nothing heard yet") }
@@ -139,6 +146,12 @@ internal fun TvRemoteScreen(
                         commandStatus = value
                         log("LISTENER  ·  $value")
                     }
+                    VoiceListeningService.ACTION_UNDERSTOOD -> log("UNDERSTOOD  ·  $value")
+                    VoiceListeningService.ACTION_ACTION -> {
+                        commandStatus = value
+                        log("ACTION  ·  $value")
+                    }
+                    VoiceListeningService.ACTION_UNMAPPED -> log("NOT MAPPED  ·  $value")
                 }
             }
         }
@@ -147,6 +160,9 @@ internal fun TvRemoteScreen(
             addAction(VoiceListeningService.ACTION_PARTIAL)
             addAction(VoiceListeningService.ACTION_STATE)
             addAction(VoiceListeningService.ACTION_ERROR)
+            addAction(VoiceListeningService.ACTION_UNDERSTOOD)
+            addAction(VoiceListeningService.ACTION_ACTION)
+            addAction(VoiceListeningService.ACTION_UNMAPPED)
         }
         if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         else @Suppress("DEPRECATION") context.registerReceiver(receiver, filter)
