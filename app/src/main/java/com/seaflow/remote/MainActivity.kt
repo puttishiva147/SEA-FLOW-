@@ -175,7 +175,9 @@ private fun SeaflowScreen(context: Context) {
     var pairingPin by remember { mutableStateOf("") }
     var pairingBusy by remember { mutableStateOf(false) }
     var awaitingPin by remember { mutableStateOf(false) }
-    var pairedName by remember { mutableStateOf<String?>(null) }
+    val pairingPreferences = remember(context) { context.getSharedPreferences("seaflow_tv_pairing", Context.MODE_PRIVATE) }
+    var pairedName by remember { mutableStateOf(pairingPreferences.getString("paired_tv_name", null)) }
+    var pairedHost by remember { mutableStateOf(pairingPreferences.getString("paired_tv_host", null)) }
     var pairingSession by remember { mutableStateOf<TvPairingClient.PairingSession?>(null) }
     val pairingSessionRef = remember { AtomicReference<TvPairingClient.PairingSession?>(null) }
     val executor = remember { Executors.newSingleThreadExecutor() }
@@ -229,7 +231,7 @@ private fun SeaflowScreen(context: Context) {
                             executor.execute {
                                 try {
                                     session.finish(enteredPin)
-                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairingSessionRef.set(null); pairedName = "TV"; pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
+                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairingSessionRef.set(null); pairedName = device.name; pairedHost = device.host; pairingPreferences.edit().putString("paired_tv_name", device.name).putString("paired_tv_host", device.host).apply(); pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
                                 } catch (error: Exception) {
                                     mainHandler.post { pairingBusy = false; pairingStatus = error.localizedMessage ?: "Pairing failed." }
                                 }
@@ -238,7 +240,7 @@ private fun SeaflowScreen(context: Context) {
                     }, enabled = !pairingBusy && pairingPin.length == 6) { Text(if (pairingBusy) "Pairing…" else "Confirm code") }
                     OutlinedButton(onClick = { pairingSession?.close(); pairingSession = null; pairingSessionRef.set(null); awaitingPin = false; pairingStatus = "Pairing cancelled."; pairingPin = "" }, enabled = !pairingBusy) { Text("Cancel pairing") }
                 }
-                pairedName?.let { Text("Paired: $it", style = MaterialTheme.typography.titleMedium) }
+                pairedName?.let { Text("Saved pairing: $it ($pairedHost). Reuse of this identity is retained in Android Keystore.", style = MaterialTheme.typography.titleMedium) }
                 Text("Discovered devices: ${devices.size}", style = MaterialTheme.typography.titleMedium)
                 if (devices.isEmpty()) {
                     Text(
