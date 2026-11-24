@@ -422,7 +422,13 @@ private fun SeaflowScreen(context: Context) {
                     }
                     "remote" -> {
                         val client = remoteClient
-                        if (client != null) TvRemoteScreen(tvNickname, client, remoteStatus) { client.close(); remoteClient = null; stage = "connected" }
+                        if (client != null) TvRemoteScreen(
+                            nickname = tvNickname,
+                            client = client,
+                            status = remoteStatus,
+                            tvHost = pairedHost.orEmpty(),
+                            tvCertificate = preferences.getString("paired_tv_certificate", "").orEmpty()
+                        ) { client.close(); remoteClient = null; stage = "connected" }
                         else Text("Remote disconnected. Reconnect from the paired TV screen.")
                     }
                 }
