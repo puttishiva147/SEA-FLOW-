@@ -332,7 +332,11 @@ private fun SeaflowScreen(context: Context) {
                                                     sessionRef.set(null)
                                                     pairedName = pendingTvName
                                                     pairedHost = pendingTvHost
-                                                    preferences.edit().putString("paired_tv_name", pendingTvName).putString("paired_tv_host", pendingTvHost).apply()
+                                                    preferences.edit()
+                                                        .putString("paired_tv_name", pendingTvName)
+                                                        .putString("paired_tv_host", pendingTvHost)
+                                                        .putString("paired_tv_certificate", Base64.getEncoder().encodeToString(session.serverCertificateDer))
+                                                        .apply()
                                                     pairingPin = ""
                                                     pairingStatus = "TV paired successfully."
                                                     stage = "connected"
