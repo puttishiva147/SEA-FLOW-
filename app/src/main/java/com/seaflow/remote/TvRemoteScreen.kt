@@ -124,7 +124,7 @@ internal fun TvRemoteScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            ContextCompat.startForegroundService(context, Intent(context, VoiceListeningService::class.java))
+            ContextCompat.startForegroundService(context, voiceServiceIntent())
             listening = true
             commandStatus = "Background voice listening started"
             log("SYSTEM  ·  Foreground listening service started")
@@ -185,7 +185,7 @@ internal fun TvRemoteScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            ContextCompat.startForegroundService(context, Intent(context, VoiceListeningService::class.java))
+                            ContextCompat.startForegroundService(context, voiceServiceIntent())
                             listening = true
                             commandStatus = "Background voice listening started"
                             log("SYSTEM  ·  Listening enabled")
