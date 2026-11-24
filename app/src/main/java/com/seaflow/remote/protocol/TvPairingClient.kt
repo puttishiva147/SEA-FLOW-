@@ -1,10 +1,8 @@
 package com.seaflow.remote.protocol
 
 import android.content.Context
-import java.math.BigInteger
 import java.net.InetSocketAddress
 import java.security.KeyStore
-import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.security.interfaces.RSAPublicKey
@@ -74,27 +72,11 @@ internal class TvPairingClient(private val context: Context) {
         private val serverCertificate: X509Certificate
     ) : AutoCloseable {
         fun finish(pin: String) {
-            val normalized = pin.trim().uppercase()
-            require(normalized.length == PIN_LENGTH && normalized.all { it in "0123456789ABCDEF" }) {
-                "Enter the six-character hexadecimal code shown on your TV."
-            }
-
             val clientKey = clientCertificate.publicKey as? RSAPublicKey
                 ?: throw IllegalStateException("SEAFLOW client certificate is not RSA.")
             val serverKey = serverCertificate.publicKey as? RSAPublicKey
                 ?: throw IllegalStateException("TV pairing certificate is not RSA.")
-
-            val digest = MessageDigest.getInstance("SHA-256").digest(
-                unsigned(clientKey.modulus) +
-                    unsigned(clientKey.publicExponent) +
-                    unsigned(serverKey.modulus) +
-                    unsigned(serverKey.publicExponent) +
-                    hexToBytes(normalized.substring(2))
-            )
-            val expectedCheck = normalized.substring(0, 2).toInt(16)
-            if ((digest[0].toInt() and 0xff) != expectedCheck) {
-                throw IllegalArgumentException("That TV code did not pass its security check. Re-enter the code shown on the TV.")
-            }
+            val digest = PairingCodeVerifier.deriveSecret(clientKey, serverKey, pin)
 
             send(socket, outer(40, ProtoWire.bytes(1, digest)))
             awaitField(socket, 41)
@@ -126,16 +108,6 @@ internal class TvPairingClient(private val context: Context) {
         ProtoWire.uint(1, PROTOCOL_VERSION) +
             ProtoWire.uint(2, STATUS_OK) +
             ProtoWire.message(payloadField, payload)
-
-    private fun unsigned(value: BigInteger): ByteArray {
-        val bytes = value.toByteArray()
-        return if (bytes.size > 1 && bytes[0] == 0.toByte()) bytes.copyOfRange(1, bytes.size) else bytes
-    }
-
-    private fun hexToBytes(value: String): ByteArray =
-        ByteArray(value.length / 2) { index ->
-            value.substring(index * 2, index * 2 + 2).toInt(16).toByte()
-        }
 
     companion object {
         private const val PAIRING_PORT = 6467
