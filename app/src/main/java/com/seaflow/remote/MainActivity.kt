@@ -168,24 +168,23 @@ private class TvDiscoveryController(
 
 @Composable
 private fun SeaflowScreen(context: Context) {
+    var stage by remember { mutableStateOf("welcome") }
     var scanning by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Ready to scan your local Wi-Fi network.") }
+    var status by remember { mutableStateOf("Ready to find your TV") }
     var devices by remember { mutableStateOf(emptyList<TvCandidate>()) }
-    var pairingStatus by remember { mutableStateOf("Not paired") }
+    var pairingStatus by remember { mutableStateOf("Not connected") }
     var pairingPin by remember { mutableStateOf("") }
     var manualHost by remember { mutableStateOf("") }
     var pendingTvName by remember { mutableStateOf("") }
     var pendingTvHost by remember { mutableStateOf("") }
     var pairingBusy by remember { mutableStateOf(false) }
-    var awaitingPin by remember { mutableStateOf(false) }
-    val pairingPreferences = remember(context) { context.getSharedPreferences("seaflow_tv_pairing", Context.MODE_PRIVATE) }
-    var pairedName by remember { mutableStateOf(pairingPreferences.getString("paired_tv_name", null)) }
-    var pairedHost by remember { mutableStateOf(pairingPreferences.getString("paired_tv_host", null)) }
+    val preferences = remember(context) { context.getSharedPreferences("seaflow_tv_pairing", Context.MODE_PRIVATE) }
+    var pairedName by remember { mutableStateOf(preferences.getString("paired_tv_name", null)) }
+    var pairedHost by remember { mutableStateOf(preferences.getString("paired_tv_host", null)) }
     var pairingSession by remember { mutableStateOf<TvPairingClient.PairingSession?>(null) }
-    val pairingSessionRef = remember { AtomicReference<TvPairingClient.PairingSession?>(null) }
+    val sessionRef = remember { AtomicReference<TvPairingClient.PairingSession?>(null) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-
     val controller = remember(context) {
         TvDiscoveryController(context) { message, results, active ->
             status = message
@@ -194,7 +193,7 @@ private fun SeaflowScreen(context: Context) {
         }
     }
     DisposableEffect(controller) {
-        onDispose { controller.close(); pairingSessionRef.getAndSet(null)?.close(); executor.shutdownNow() }
+        onDispose { controller.close(); sessionRef.getAndSet(null)?.close(); executor.shutdownNow() }
     }
 
     fun beginPairing(hostValue: String, displayName: String) {
@@ -205,106 +204,176 @@ private fun SeaflowScreen(context: Context) {
         }
         pairingSession?.close()
         pairingSession = null
-        pairingSessionRef.set(null)
-        awaitingPin = false
+        sessionRef.set(null)
         pairingBusy = true
         pendingTvName = displayName
         pendingTvHost = host
-        pairingStatus = "Opening encrypted pairing connection to $displayName…"
+        pairingStatus = "Opening secure connection to $displayName…"
         executor.execute {
             try {
-                val session = TvPairingClient(context).begin(host)
+                val session = TvPairingClient(context.applicationContext).begin(host)
                 mainHandler.post {
                     pairingSession = session
-                    pairingSessionRef.set(session)
+                    sessionRef.set(session)
                     pairingBusy = false
-                    awaitingPin = true
                     pairingPin = ""
-                    pairingStatus = "Connection established. Check your TV screen for its six-character pairing code."
+                    pairingStatus = "Connection established. Enter the code shown on your TV."
+                    stage = "pair"
                 }
             } catch (error: Exception) {
                 mainHandler.post {
                     pairingBusy = false
-                    pairingStatus = "Could not start secure pairing: ${error.localizedMessage ?: "connection failed"}"
+                    pairingStatus = error.localizedMessage ?: "Could not start pairing."
                 }
             }
         }
     }
 
-    MaterialTheme {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
+    val navy = androidx.compose.ui.graphics.Color(0xFF071426)
+    val panel = androidx.compose.ui.graphics.Color(0xFF10243D)
+    val cyan = androidx.compose.ui.graphics.Color(0xFF25C7E8)
+    val muted = androidx.compose.ui.graphics.Color(0xFF9FB2C8)
+    val scheme = androidx.compose.material3.darkColorScheme(
+        primary = cyan,
+        secondary = androidx.compose.ui.graphics.Color(0xFF4D86FF),
+        background = navy,
+        surface = panel,
+        onPrimary = navy,
+        onBackground = androidx.compose.ui.graphics.Color(0xFFF3F7FC),
+        onSurface = androidx.compose.ui.graphics.Color(0xFFF3F7FC)
+    )
+
+    MaterialTheme(colorScheme = scheme) {
+        Surface(Modifier.fillMaxSize(), color = navy) {
             Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                Modifier.fillMaxSize().padding(horizontal = 22.dp, vertical = 26.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                Text("SEAFLOW", style = MaterialTheme.typography.headlineLarge)
-                Text("TV discovery", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "Connect your phone and TV to the same Wi-Fi network. SEAFLOW searches for the Android TV Remote service; discovery does not yet mean the TV is paired.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = { controller.start() }, enabled = !scanning) {
-                        Text(if (scanning) "Scanning…" else "Find TVs")
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("◉", color = cyan, style = MaterialTheme.typography.headlineMedium)
+                        Column {
+                            Text("SEA", style = MaterialTheme.typography.titleLarge)
+                            Text("FLOW", color = cyan, style = MaterialTheme.typography.titleLarge)
+                        }
                     }
-                    OutlinedButton(onClick = { controller.stop(); scanning = false; status = "Scan stopped." }, enabled = scanning) {
-                        Text("Stop")
-                    }
+                    Text("PHONE  ↔  TV", color = muted, style = MaterialTheme.typography.labelMedium)
                 }
-                Text(status, style = MaterialTheme.typography.bodyMedium)
-                Text(pairingStatus, style = MaterialTheme.typography.bodyMedium)
-                if (awaitingPin) {
-                    Text("Enter the six-character hexadecimal code displayed on your TV.", style = MaterialTheme.typography.bodySmall)
-                    TextField(value = pairingPin, onValueChange = { pairingPin = it.uppercase().filter { c -> c in "0123456789ABCDEF" }.take(6) }, label = { Text("TV pairing code") }, singleLine = true)
-                    Button(onClick = {
-                        val session = pairingSession
-                        val enteredPin = pairingPin
-                        if (session != null && enteredPin.length == 6 && !pairingBusy) {
-                            pairingBusy = true
-                            pairingStatus = "Verifying the TV code and completing secure pairing…"
-                            executor.execute {
-                                try {
-                                    session.finish(enteredPin)
-                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairingSessionRef.set(null); pairedName = pendingTvName; pairedHost = pendingTvHost; pairingPreferences.edit().putString("paired_tv_name", pendingTvName).putString("paired_tv_host", pendingTvHost).apply(); pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
-                                } catch (error: Exception) {
-                                    mainHandler.post { pairingBusy = false; pairingStatus = error.localizedMessage ?: "Pairing failed." }
+                when (stage) {
+                    "welcome" -> {
+                        Spacer(Modifier.weight(0.3f))
+                        Text("Your TV.\nOne simple remote.", style = MaterialTheme.typography.headlineLarge)
+                        Text("Connect your phone and TV on the same Wi-Fi. SEAFLOW guides you through secure pairing.", color = muted, style = MaterialTheme.typography.bodyLarge)
+                        SetupStep("01", "Connect to the same Wi-Fi", "Phone and TV must share a network")
+                        SetupStep("02", "Find your television", "Automatic discovery or manual address")
+                        SetupStep("03", "Pair securely", "Confirm the code displayed on your TV")
+                        Spacer(Modifier.weight(0.7f))
+                        Button(onClick = { stage = "discover" }, modifier = Modifier.fillMaxWidth()) { Text("Set up SEAFLOW  →") }
+                    }
+                    "discover" -> {
+                        Text("Connect your TV", style = MaterialTheme.typography.headlineMedium)
+                        Text("Make sure your phone and TV are on the same Wi-Fi network.", color = muted)
+                        Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("STEP 1  ·  FIND YOUR TV", color = cyan, style = MaterialTheme.typography.labelMedium)
+                                Text("Search the local network for compatible Android TV devices.")
+                                Button(onClick = { controller.start() }, enabled = !scanning, modifier = Modifier.fillMaxWidth()) { Text(if (scanning) "Searching…" else "Find TVs on Wi-Fi") }
+                                if (scanning) OutlinedButton(onClick = { controller.stop(); scanning = false }, modifier = Modifier.fillMaxWidth()) { Text("Stop search") }
+                                Text(status, color = muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Text("AVAILABLE DEVICES  ·  \${devices.size}", color = cyan, style = MaterialTheme.typography.labelMedium)
+                        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(devices, key = { "\${it.host}:\${it.port}" }) { device ->
+                                Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
+                                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(device.name, style = MaterialTheme.typography.titleMedium)
+                                            Text(device.host, color = muted, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        Button(onClick = { beginPairing(device.host, device.name) }, enabled = !pairingBusy) { Text("Connect") }
+                                    }
                                 }
                             }
                         }
-                    }, enabled = !pairingBusy && pairingPin.length == 6) { Text(if (pairingBusy) "Pairing…" else "Confirm code") }
-                    OutlinedButton(onClick = { pairingSession?.close(); pairingSession = null; pairingSessionRef.set(null); awaitingPin = false; pairingStatus = "Pairing cancelled."; pairingPin = "" }, enabled = !pairingBusy) { Text("Cancel pairing") }
-                }
-                pairedName?.let { Text("Saved pairing: $it ($pairedHost). Client identity is retained in Android Keystore.", style = MaterialTheme.typography.titleMedium) }
-                TextField(value = manualHost, onValueChange = { manualHost = it.take(120) }, label = { Text("TV IP address or host name") }, singleLine = true)
-                OutlinedButton(onClick = { beginPairing(manualHost, manualHost) }, enabled = manualHost.isNotBlank() && !pairingBusy && !awaitingPin) { Text("Pair by address") }
-                Text("Discovered devices: ${devices.size}", style = MaterialTheme.typography.titleMedium)
-                if (devices.isEmpty()) {
-                    Text(
-                        "No compatible service found yet. Some TV models disable or do not advertise the Android TV Remote service.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                } else {
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(devices, key = { "${it.host}:${it.port}" }) { device ->
-                            Card(Modifier.fillMaxWidth()) {
-                                Column(
-                                    Modifier.fillMaxWidth().padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(5.dp)
-                                ) {
-                                    Text(device.name, style = MaterialTheme.typography.titleMedium)
-                                    Text("${device.host}:${device.port}")
-                                    Text(device.service, style = MaterialTheme.typography.bodySmall)
-                                    Text("Android TV Remote v2 service discovered.", style = MaterialTheme.typography.bodySmall)
-                                    Button(onClick = { beginPairing(device.host, device.name) }, enabled = !pairingBusy && !awaitingPin) { Text("Pair this TV") }
-                                }
+                        Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Can't find your TV?", style = MaterialTheme.typography.titleSmall)
+                                Text("Enter its local IP address to try pairing directly.", color = muted, style = MaterialTheme.typography.bodySmall)
+                                TextField(value = manualHost, onValueChange = { manualHost = it.take(120) }, modifier = Modifier.fillMaxWidth(), label = { Text("TV IP address or host name") }, singleLine = true)
+                                OutlinedButton(onClick = { beginPairing(manualHost, manualHost) }, enabled = manualHost.isNotBlank() && !pairingBusy, modifier = Modifier.fillMaxWidth()) { Text("Continue with address") }
                             }
                         }
+                    }
+                    "pair" -> {
+                        Text("Verify your TV", style = MaterialTheme.typography.headlineMedium)
+                        Text("STEP 2  ·  SECURE PAIRING", color = cyan, style = MaterialTheme.typography.labelMedium)
+                        Text("A six-character code should appear on your television. Enter it below to finish pairing.", color = muted)
+                        Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                Text(pendingTvName, style = MaterialTheme.typography.titleLarge)
+                                Text(pendingTvHost, color = muted)
+                                TextField(value = pairingPin, onValueChange = { pairingPin = it.uppercase().filter { c -> c in "0123456789ABCDEF" }.take(6) }, modifier = Modifier.fillMaxWidth(), label = { Text("6-character TV code") }, singleLine = true)
+                                Button(onClick = {
+                                    val session = pairingSession
+                                    val pin = pairingPin
+                                    if (session != null && pin.length == 6 && !pairingBusy) {
+                                        pairingBusy = true
+                                        pairingStatus = "Verifying code…"
+                                        executor.execute {
+                                            try {
+                                                session.finish(pin)
+                                                mainHandler.post {
+                                                    pairingBusy = false
+                                                    pairingSession = null
+                                                    sessionRef.set(null)
+                                                    pairedName = pendingTvName
+                                                    pairedHost = pendingTvHost
+                                                    preferences.edit().putString("paired_tv_name", pendingTvName).putString("paired_tv_host", pendingTvHost).apply()
+                                                    pairingPin = ""
+                                                    pairingStatus = "TV paired successfully."
+                                                    stage = "connected"
+                                                }
+                                            } catch (error: Exception) {
+                                                mainHandler.post {
+                                                    pairingBusy = false
+                                                    pairingStatus = error.localizedMessage ?: "Pairing failed. Check the code and try again."
+                                                }
+                                            }
+                                        }
+                                    }
+                                }, enabled = !pairingBusy && pairingPin.length == 6, modifier = Modifier.fillMaxWidth()) { Text(if (pairingBusy) "Verifying…" else "Pair my TV") }
+                            }
+                        }
+                        Text(pairingStatus, color = muted)
+                        TextButton(onClick = { pairingSession?.close(); pairingSession = null; sessionRef.set(null); pairingPin = ""; stage = "discover"; pairingStatus = "Pairing cancelled." }) { Text("Back to device list") }
+                    }
+                    "connected" -> {
+                        Text("You're connected.", style = MaterialTheme.typography.headlineMedium)
+                        Text("SEAFLOW pairing is saved on this phone.", color = muted)
+                        Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
+                            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("PAIRED TELEVISION", color = cyan, style = MaterialTheme.typography.labelMedium)
+                                Text(pairedName ?: "Your TV", style = MaterialTheme.typography.titleLarge)
+                                Text(pairedHost ?: "", color = muted)
+                                Text("Secure pairing completed. Remote commands are not enabled in this build yet.", color = muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Button(onClick = { stage = "discover" }, modifier = Modifier.fillMaxWidth()) { Text("Add another TV") }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SetupStep(number: String, title: String, detail: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(number, color = androidx.compose.ui.graphics.Color(0xFF25C7E8), style = MaterialTheme.typography.titleLarge)
+        Column {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(detail, color = androidx.compose.ui.graphics.Color(0xFF9FB2C8), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
