@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.seaflow.remote.protocol.TvPairingClient
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicReference
 
 data class TvCandidate(
     val name: String,
@@ -119,9 +120,7 @@ private class TvDiscoveryController(
                     finishScan("Android TV discovery could not start (error $errorCode).")
                 }
 
-                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                    nsd.stopServiceDiscovery(this)
-                }
+                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
             }
             listeners += listener
             nsd.discoverServices("_androidtvremote2._tcp.", NsdManager.PROTOCOL_DNS_SD, listener)
@@ -178,6 +177,7 @@ private fun SeaflowScreen(context: Context) {
     var awaitingPin by remember { mutableStateOf(false) }
     var pairedName by remember { mutableStateOf<String?>(null) }
     var pairingSession by remember { mutableStateOf<TvPairingClient.PairingSession?>(null) }
+    val pairingSessionRef = remember { AtomicReference<TvPairingClient.PairingSession?>(null) }
     val executor = remember { Executors.newSingleThreadExecutor() }
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
@@ -189,7 +189,7 @@ private fun SeaflowScreen(context: Context) {
         }
     }
     DisposableEffect(controller) {
-        onDispose { controller.close(); pairingSession?.close(); executor.shutdownNow() }
+        onDispose { controller.close(); pairingSessionRef.getAndSet(null)?.close(); executor.shutdownNow() }
     }
 
     MaterialTheme {
@@ -222,20 +222,21 @@ private fun SeaflowScreen(context: Context) {
                     TextField(value = pairingPin, onValueChange = { pairingPin = it.uppercase().filter { c -> c in "0123456789ABCDEF" }.take(6) }, label = { Text("TV pairing code") }, singleLine = true)
                     Button(onClick = {
                         val session = pairingSession
-                        if (session != null && pairingPin.length == 6 && !pairingBusy) {
+                        val enteredPin = pairingPin
+                        if (session != null && enteredPin.length == 6 && !pairingBusy) {
                             pairingBusy = true
                             pairingStatus = "Verifying the TV code and completing secure pairing…"
                             executor.execute {
                                 try {
-                                    session.finish(pairingPin)
-                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairedName = "TV"; pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
+                                    session.finish(enteredPin)
+                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairingSessionRef.set(null); pairedName = "TV"; pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
                                 } catch (error: Exception) {
                                     mainHandler.post { pairingBusy = false; pairingStatus = error.localizedMessage ?: "Pairing failed." }
                                 }
                             }
                         }
                     }, enabled = !pairingBusy && pairingPin.length == 6) { Text(if (pairingBusy) "Pairing…" else "Confirm code") }
-                    OutlinedButton(onClick = { pairingSession?.close(); pairingSession = null; awaitingPin = false; pairingStatus = "Pairing cancelled."; pairingPin = "" }, enabled = !pairingBusy) { Text("Cancel pairing") }
+                    OutlinedButton(onClick = { pairingSession?.close(); pairingSession = null; pairingSessionRef.set(null); awaitingPin = false; pairingStatus = "Pairing cancelled."; pairingPin = "" }, enabled = !pairingBusy) { Text("Cancel pairing") }
                 }
                 pairedName?.let { Text("Paired: $it", style = MaterialTheme.typography.titleMedium) }
                 Text("Discovered devices: ${devices.size}", style = MaterialTheme.typography.titleMedium)
@@ -259,6 +260,7 @@ private fun SeaflowScreen(context: Context) {
                                     Button(onClick = {
                                         pairingSession?.close()
                                         pairingSession = null
+                                        pairingSessionRef.set(null)
                                         awaitingPin = false
                                         pairingBusy = true
                                         pairingStatus = "Opening encrypted pairing connection to ${device.name}…"
@@ -267,6 +269,7 @@ private fun SeaflowScreen(context: Context) {
                                                 val session = TvPairingClient(context).begin(device.host)
                                                 mainHandler.post {
                                                     pairingSession = session
+                                                    pairingSessionRef.set(session)
                                                     pairingBusy = false
                                                     awaitingPin = true
                                                     pairingPin = ""
