@@ -71,6 +71,8 @@ internal class TvPairingClient(private val context: Context) {
         private val clientCertificate: X509Certificate,
         private val serverCertificate: X509Certificate
     ) : AutoCloseable {
+        val serverCertificateDer: ByteArray get() = serverCertificate.encoded
+
         fun finish(pin: String) {
             val clientKey = clientCertificate.publicKey as? RSAPublicKey
                 ?: throw IllegalStateException("SEAFLOW client certificate is not RSA.")
