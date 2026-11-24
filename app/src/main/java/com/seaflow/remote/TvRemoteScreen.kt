@@ -41,24 +41,26 @@ internal fun TvRemoteScreen(
                 .lowercase()
             try {
                 when {
-                    command.contains("open youtube") -> {
-                        client.launchAppLink("https://www.youtube.com")
-                        commandStatus = "Opening YouTube"
-                    }
                     command.contains("play") && (command.contains("music") || command.contains("song")) -> {
                         client.launchAppLink("https://music.youtube.com/search?q=random%20music")
                         commandStatus = "Opening YouTube Music search"
                     }
+                    command.contains("open youtube") -> {
+                        client.launchAppLink("https://www.youtube.com")
+                        commandStatus = "Opening YouTube"
+                    }
                     command.contains("open browser") || command.contains("open website") || command.contains("search") -> {
-                        val url = Regex("https?://[^\\s]+").find(phrase)?.value
-                        if (url != null) {
+                        val rawUrl = Regex("(?i)(?:https?://)?(?:www\\.)?[a-z0-9-]+\\.[a-z]{2,}(?:/[^\\s]*)?").find(phrase)?.value
+                        if (rawUrl != null) {
+                            val url = if (rawUrl.startsWith("http")) rawUrl else "https://$rawUrl"
                             client.launchAppLink(url)
                             commandStatus = "Opening $url"
-                        } else commandStatus = "Say the full website address, for example https://example.com"
+                        } else commandStatus = "Say the website name or full address, for example example.com"
                     }
                     command.contains("volume up") -> { client.press(24); commandStatus = "Volume up" }
                     command.contains("volume down") -> { client.press(25); commandStatus = "Volume down" }
                     command.contains("mute") -> { client.press(164); commandStatus = "Mute" }
+                    command.contains("power") || command.contains("turn off tv") -> { client.press(177); commandStatus = "Sending TV power command (if supported)" }
                     command.contains("go home") || command == "home" -> { client.press(3); commandStatus = "Home" }
                     command.contains("go back") || command == "back" -> { client.press(4); commandStatus = "Back" }
                     command.contains("play pause") || command.contains("pause") -> { client.press(85); commandStatus = "Play / pause" }
@@ -99,6 +101,7 @@ internal fun TvRemoteScreen(
             OutlinedButton(onClick = { client.press(82) }) { Text("Menu") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            OutlinedButton(onClick = { client.press(177) }) { Text("Power") }
             Button(onClick = { client.press(24) }) { Text("Vol +") }
             Button(onClick = { client.press(25) }) { Text("Vol −") }
             Button(onClick = { client.press(164) }) { Text("Mute") }
