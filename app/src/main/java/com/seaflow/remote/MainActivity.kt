@@ -291,9 +291,9 @@ private fun SeaflowScreen(context: Context) {
                                 Text(status, color = muted, style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        Text("AVAILABLE DEVICES  ·  \${devices.size}", color = cyan, style = MaterialTheme.typography.labelMedium)
+                        Text("AVAILABLE DEVICES  ·  ${devices.size}", color = cyan, style = MaterialTheme.typography.labelMedium)
                         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(devices, key = { "\${it.host}:\${it.port}" }) { device ->
+                            items(devices, key = { "${it.host}:${it.port}" }) { device ->
                                 Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
                                     Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Column(Modifier.weight(1f)) {
