@@ -9,6 +9,8 @@ import android.os.Handler
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -258,7 +260,7 @@ private fun SeaflowScreen(context: Context) {
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("◉", color = cyan, style = MaterialTheme.typography.headlineMedium)
+                        Image(painter = painterResource(com.seaflow.remote.R.drawable.ic_seaflow_logo), contentDescription = "SEAFLOW logo", modifier = Modifier.padding(end = 4.dp).fillMaxWidth(0.14f))
                         Column {
                             Text("SEA", style = MaterialTheme.typography.titleLarge)
                             Text("FLOW", color = cyan, style = MaterialTheme.typography.titleLarge)
