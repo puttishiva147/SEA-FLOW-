@@ -8,9 +8,10 @@ import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import java.util.Calendar
+import java.util.UUID
 import javax.security.auth.x500.X500Principal
 
-/** Persistent RSA client identity. The private key stays inside AndroidKeyStore. */
+/** Persistent RSA client identity. The private key remains inside AndroidKeyStore. */
 internal class TvClientIdentity(context: Context) {
     private val alias = "seaflow-tv-remote-client"
     private val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -29,9 +30,10 @@ internal class TvClientIdentity(context: Context) {
     private fun createIdentity(context: Context) {
         val start = Calendar.getInstance()
         val end = Calendar.getInstance().apply { add(Calendar.YEAR, 10) }
+        val subject = X500Principal("CN=SEAFLOW-${UUID.randomUUID()}")
         val spec = KeyPairGeneratorSpec.Builder(context)
             .setAlias(alias)
-            .setSubject(X500Principal("CN=SEAFLOW Android TV Remote"))
+            .setSubject(subject)
             .setSerialNumber(BigInteger.valueOf(System.currentTimeMillis()))
             .setStartDate(start.time)
             .setEndDate(end.time)
