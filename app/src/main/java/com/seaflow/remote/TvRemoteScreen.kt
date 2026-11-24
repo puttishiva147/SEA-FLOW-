@@ -48,7 +48,7 @@ internal fun TvRemoteScreen(
     onDisconnect: () -> Unit
 ) {
     val context = LocalContext.current
-    fun voiceServiceIntent() = voiceServiceIntent().apply {
+    fun voiceServiceIntent() = Intent(context, VoiceListeningService::class.java).apply {
         putExtra(VoiceListeningService.EXTRA_HOST, tvHost)
         putExtra(VoiceListeningService.EXTRA_CERT, tvCertificate)
         putExtra(VoiceListeningService.EXTRA_NICKNAME, nickname)
