@@ -22,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import android.os.Handler\nimport android.os.Looper\nimport com.seaflow.remote.protocol.TvPairingClient\nimport java.util.concurrent.Executors
 
 data class TvCandidate(
     val name: String,
@@ -168,7 +170,7 @@ private class TvDiscoveryController(
 private fun SeaflowScreen(context: Context) {
     var scanning by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Ready to scan your local Wi-Fi network.") }
-    var devices by remember { mutableStateOf(emptyList<TvCandidate>()) }
+    var devices by remember { mutableStateOf(emptyList<TvCandidate>()) }\n    var pairingStatus by remember { mutableStateOf("Not paired") }\n    var pairingPin by remember { mutableStateOf("") }\n    var pairingBusy by remember { mutableStateOf(false) }\n    var awaitingPin by remember { mutableStateOf(false) }\n    var pairedName by remember { mutableStateOf<String?>(null) }\n    var pairingSession by remember { mutableStateOf<TvPairingClient.PairingSession?>(null) }\n    val executor = remember { Executors.newSingleThreadExecutor() }\n    val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     val controller = remember(context) {
         TvDiscoveryController(context) { message, results, active ->
@@ -178,7 +180,7 @@ private fun SeaflowScreen(context: Context) {
         }
     }
     DisposableEffect(controller) {
-        onDispose { controller.close() }
+        onDispose { controller.close(); pairingSession?.close(); executor.shutdownNow() }
     }
 
     MaterialTheme {
@@ -204,7 +206,7 @@ private fun SeaflowScreen(context: Context) {
                         Text("Stop")
                     }
                 }
-                Text(status, style = MaterialTheme.typography.bodyMedium)
+                Text(status, style = MaterialTheme.typography.bodyMedium)\n                Text(pairingStatus, style = MaterialTheme.typography.bodyMedium)\n                if (awaitingPin) {\n                    Text("Enter the six-character hexadecimal code displayed on your TV.", style = MaterialTheme.typography.bodySmall)\n                    TextField(value = pairingPin, onValueChange = { pairingPin = it.uppercase().filter { c -> c in "0123456789ABCDEF" }.take(6) }, label = { Text("TV pairing code") }, singleLine = true)\n                    Button(onClick = {\n                        val session = pairingSession\n                        if (session != null && pairingPin.length == 6 && !pairingBusy) {\n                            pairingBusy = true\n                            pairingStatus = "Verifying the TV code and completing secure pairing…"\n                            executor.execute {\n                                try {\n                                    session.finish(pairingPin)\n                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairedName = "TV"; pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }\n                                } catch (error: Exception) {\n                                    mainHandler.post { pairingBusy = false; pairingStatus = error.localizedMessage ?: "Pairing failed." }\n                                }\n                            }\n                        }\n                    }, enabled = !pairingBusy && pairingPin.length == 6) { Text(if (pairingBusy) "Pairing…" else "Confirm code") }\n                    OutlinedButton(onClick = { pairingSession?.close(); pairingSession = null; awaitingPin = false; pairingStatus = "Pairing cancelled."; pairingPin = "" }, enabled = !pairingBusy) { Text("Cancel pairing") }\n                }\n                pairedName?.let { Text("Paired: $it", style = MaterialTheme.typography.titleMedium) }
                 Text("Discovered devices: ${devices.size}", style = MaterialTheme.typography.titleMedium)
                 if (devices.isEmpty()) {
                     Text(
