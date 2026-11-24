@@ -18,7 +18,7 @@ import javax.net.ssl.SSLSocket
  */
 internal class TvPairingClient(private val context: Context) {
     fun begin(host: String): PairingSession {
-        val identity = TvClientIdentity(context)
+        val identity = TvClientIdentity(context.applicationContext)
         val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val keyManagers = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply {
             init(keyStore, null)
