@@ -68,7 +68,7 @@ internal class TvPairingClient(private val context: Context) {
         }
     }
 
-    internal class PairingSession(
+    internal inner class PairingSession(
         private val socket: SSLSocket,
         private val clientCertificate: X509Certificate,
         private val serverCertificate: X509Certificate
