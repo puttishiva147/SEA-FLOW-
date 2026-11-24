@@ -11,7 +11,9 @@ import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.util.Log
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import java.util.Locale
 import com.seaflow.remote.protocol.TvRemoteClient
 import java.net.URLEncoder
 import java.util.Base64
@@ -22,10 +24,22 @@ class VoiceListeningService : Service(), RecognitionListener {
     private var listening = false
     private var restarting = false
     private var nickname = "Nexa"
+    private var speaker: TextToSpeech? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        speaker = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                speaker?.language = Locale.getDefault()
+                speaker?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(id: String?) = Unit
+                    override fun onDone(id: String?) { scheduleRestart() }
+                    @Deprecated("Deprecated in Android API")
+                    override fun onError(id: String?) { scheduleRestart() }
+                })
+            }
+        }
         val notification = if (Build.VERSION.SDK_INT >= 26) {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("SEAFLOW voice control is active")
@@ -97,10 +111,6 @@ class VoiceListeningService : Service(), RecognitionListener {
     }
 
     private fun executeCommand(phrase: String) {
-        val target = remote ?: run {
-            emit(ACTION_ERROR, "Voice heard, but the background TV control channel is not connected.")
-            return
-        }
         val spoken = phrase.trim()
         if (!spoken.startsWith(nickname, ignoreCase = true)) {
             emit(ACTION_UNMAPPED, "Ignored without wake word '$nickname': $phrase")
@@ -108,6 +118,25 @@ class VoiceListeningService : Service(), RecognitionListener {
         }
         val command = spoken.replace(Regex("(?i)^" + Regex.escape(nickname) + "[, ]*"), "").lowercase()
         emit(ACTION_UNDERSTOOD, command)
+        val assistantReply = when {
+            command == "hello" || command == "hi" || command == "hey" -> "Hello! I'm SEAFLOW. What can I do for you?"
+            command.contains("who are you") -> "I'm SEAFLOW, your voice assistant and television controller."
+            command.contains("how are you") -> "I'm doing well and ready to help."
+            command.contains("what time") || command == "time" -> "It's " + java.text.SimpleDateFormat("h:mm a", Locale.getDefault()).format(java.util.Date())
+            command.contains("what can you do") || command.contains("help me") -> "I can control supported TV functions, open apps and websites, search Google, and answer a few basic questions."
+            else -> null
+        }
+        if (assistantReply != null) {
+            emit(ACTION_ACTION, assistantReply)
+            speak(assistantReply)
+            return
+        }
+        val target = remote ?: run {
+            val reply = "I heard you, but the television connection is not ready."
+            emit(ACTION_ERROR, reply)
+            speak(reply)
+            return
+        }
         try {
             val action = when {
                 command.contains("play") && (command.contains("music") || command.contains("song")) -> {
@@ -142,9 +171,19 @@ class VoiceListeningService : Service(), RecognitionListener {
                 else -> { emit(ACTION_UNMAPPED, phrase); "Command not mapped yet" }
             }
             emit(ACTION_ACTION, action)
+            speak(action)
         } catch (error: Exception) {
-            emit(ACTION_ERROR, error.localizedMessage ?: "TV command failed")
+            val message = error.localizedMessage ?: "TV command failed"
+            emit(ACTION_ERROR, message)
+            speak(message)
         }
+    }
+
+    private fun speak(message: String) {
+        val engine = speaker ?: return
+        listening = false
+        try { recognizer?.cancel() } catch (_: Exception) { }
+        engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, "seaflow-" + System.nanoTime())
     }
 
     override fun onPartialResults(partialResults: Bundle?) {
@@ -183,6 +222,9 @@ class VoiceListeningService : Service(), RecognitionListener {
         listening = false
         try { recognizer?.cancel(); recognizer?.destroy() } catch (_: Exception) { }
         recognizer = null
+        speaker?.stop()
+        speaker?.shutdown()
+        speaker = null
         remote?.close()
         remote = null
         super.onDestroy()
