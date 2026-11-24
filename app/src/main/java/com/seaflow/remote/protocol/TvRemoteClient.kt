@@ -23,6 +23,8 @@ internal class TvRemoteClient(
     private val connected = AtomicBoolean(false)
     private val writeLock = Any()
     private var supportedFeatures = 0L
+    @Volatile private var imeCounter = 0L
+    @Volatile private var imeFieldCounter = 0L
 
     init {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -85,6 +87,19 @@ internal class TvRemoteClient(
         write(ProtoWire.message(90, ProtoWire.string(1, uri)))
     }
 
+    fun sendText(text: String) {
+        checkReady()
+        require(text.isNotEmpty() && text.length <= 500) { "Text must contain 1 to 500 characters." }
+        val imeObject = ProtoWire.uint(1, text.length.toLong()) +
+            ProtoWire.uint(2, text.length.toLong()) +
+            ProtoWire.string(3, text)
+        val editInfo = ProtoWire.uint(1, 1) + ProtoWire.message(2, imeObject)
+        val batch = ProtoWire.uint(1, imeCounter) +
+            ProtoWire.uint(2, imeFieldCounter) +
+            ProtoWire.message(3, editInfo)
+        write(ProtoWire.message(21, batch))
+    }
+
     private fun readLoop() {
         try {
             while (connected.get() && !socket.isClosed) {
@@ -93,6 +108,19 @@ internal class TvRemoteClient(
                 if (ping != null) {
                     val value = ProtoWire.fields(ping).firstOrNull { it.number == 1 }?.integer ?: 0L
                     write(ProtoWire.message(9, ProtoWire.uint(1, value)))
+                }
+                val ime = fields.firstOrNull { it.number == 20 }?.data
+                if (ime != null) {
+                    val imeFields = ProtoWire.fields(ime)
+                    val appInfo = imeFields.firstOrNull { it.number == 1 }?.data?.let(ProtoWire::fields).orEmpty()
+                    val textStatus = imeFields.firstOrNull { it.number == 2 }?.data?.let(ProtoWire::fields).orEmpty()
+                    imeCounter = appInfo.firstOrNull { it.number == 1 }?.integer ?: imeCounter
+                    imeFieldCounter = textStatus.firstOrNull { it.number == 1 }?.integer ?: imeFieldCounter
+                }
+                val imeShow = fields.firstOrNull { it.number == 22 }?.data
+                if (imeShow != null) {
+                    val status = ProtoWire.fields(imeShow).firstOrNull { it.number == 2 }?.data?.let(ProtoWire::fields).orEmpty()
+                    imeFieldCounter = status.firstOrNull { it.number == 1 }?.integer ?: imeFieldCounter
                 }
             }
         } catch (error: Exception) {
