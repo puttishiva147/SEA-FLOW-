@@ -116,7 +116,7 @@ class VoiceListeningService : Service(), RecognitionListener {
                 command.contains("open youtube") -> { target.launchAppLink("https://www.youtube.com"); "Opening YouTube" }
                 command.contains("open google") -> { target.launchAppLink("https://www.google.com"); "Opening Google" }
                 command.contains("open browser") || command.contains("open website") -> {
-                    val url = Regex("(?i)(?:https?://)?(?:www\\\\.)?[a-z0-9-]+\\\\.[a-z]{2,}(?:/[^\\\\s]*)?").find(command)?.value
+                    val url = Regex("(?i)(?:https?://)?(?:www\\.)?[a-z0-9-]+\\.[a-z]{2,}(?:/[^\\s]*)?").find(command)?.value
                         ?: throw IllegalArgumentException("Say the website address after open browser.")
                     target.launchAppLink(if (url.startsWith("http")) url else "https://$url")
                     "Opening $url"
