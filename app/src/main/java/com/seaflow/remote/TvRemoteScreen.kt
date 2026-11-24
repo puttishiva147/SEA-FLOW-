@@ -33,6 +33,7 @@ internal fun TvRemoteScreen(
 ) {
     var commandStatus by remember { mutableStateOf("Ready") }
     var website by remember { mutableStateOf("") }
+    var tvText by remember { mutableStateOf("") }
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val phrase = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
         if (phrase.isNotBlank()) {
@@ -110,6 +111,11 @@ internal fun TvRemoteScreen(
             Button(onClick = { client.launchAppLink("https://www.youtube.com") }, modifier = Modifier.weight(1f)) { Text("YouTube") }
             Button(onClick = { client.launchAppLink("https://music.youtube.com") }, modifier = Modifier.weight(1f)) { Text("Music") }
         }
+        TextField(value = tvText, onValueChange = { tvText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Type into the focused TV field") }, singleLine = true)
+        OutlinedButton(onClick = {
+            try { client.sendText(tvText); commandStatus = "Text sent to TV"; tvText = "" }
+            catch (error: Exception) { commandStatus = error.localizedMessage ?: "Text entry failed" }
+        }, enabled = tvText.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Send text to TV") }
         TextField(value = website, onValueChange = { website = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Website URL") }, singleLine = true)
         OutlinedButton(onClick = {
             val url = website.trim().let { if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it" }
