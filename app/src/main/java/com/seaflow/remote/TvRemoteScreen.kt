@@ -139,7 +139,7 @@ internal fun TvRemoteScreen(
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 val value = intent?.getStringExtra(VoiceListeningService.EXTRA_TEXT).orEmpty()
                 when (intent?.action) {
-                    VoiceListeningService.ACTION_HEARD -> processVoice(value)
+                    VoiceListeningService.ACTION_HEARD -> { heardText = value; log("HEARD  ·  $value") }
                     VoiceListeningService.ACTION_PARTIAL -> heardText = value
                     VoiceListeningService.ACTION_STATE -> commandStatus = value
                     VoiceListeningService.ACTION_ERROR -> {
