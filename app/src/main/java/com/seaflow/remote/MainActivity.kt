@@ -174,9 +174,14 @@ private class TvDiscoveryController(
 
 @Composable
 private fun SeaflowScreen(context: Context) {
-    var stage by remember { mutableStateOf("welcome") }
+    val preferences = remember(context) { context.getSharedPreferences("seaflow_tv_pairing", Context.MODE_PRIVATE) }
+    val hasSavedPairing = remember(preferences) {
+        !preferences.getString("paired_tv_host", null).isNullOrBlank() &&
+            !preferences.getString("paired_tv_certificate", null).isNullOrBlank()
+    }
+    var stage by remember { mutableStateOf(if (hasSavedPairing) "connected" else "welcome") }
     var remoteClient by remember { mutableStateOf<TvRemoteClient?>(null) }
-    var tvNickname by remember { mutableStateOf("Nexa") }
+    var tvNickname by remember { mutableStateOf(preferences.getString("tv_nickname", "Nexa") ?: "Nexa") }
     var remoteStatus by remember { mutableStateOf("Not connected") }
     var scanning by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Ready to find your TV") }
@@ -187,7 +192,6 @@ private fun SeaflowScreen(context: Context) {
     var pendingTvName by remember { mutableStateOf("") }
     var pendingTvHost by remember { mutableStateOf("") }
     var pairingBusy by remember { mutableStateOf(false) }
-    val preferences = remember(context) { context.getSharedPreferences("seaflow_tv_pairing", Context.MODE_PRIVATE) }
     var pairedName by remember { mutableStateOf(preferences.getString("paired_tv_name", null)) }
     var pairedHost by remember { mutableStateOf(preferences.getString("paired_tv_host", null)) }
     var pairingSession by remember { mutableStateOf<TvPairingClient.PairingSession?>(null) }
@@ -364,7 +368,13 @@ private fun SeaflowScreen(context: Context) {
                     "connected" -> {
                         Text("TV paired", style = MaterialTheme.typography.headlineMedium)
                         Text("Give your TV a voice nickname.", color = muted)
-                        TextField(value = tvNickname, onValueChange = { tvNickname = it.take(24) }, modifier = Modifier.fillMaxWidth(), label = { Text("TV nickname") }, singleLine = true)
+                        TextField(
+                            value = tvNickname,
+                            onValueChange = { tvNickname = it.take(24) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("TV nickname") },
+                            singleLine = true
+                        )
                         Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(pairedName ?: "Your TV", style = MaterialTheme.typography.titleLarge)
@@ -375,16 +385,40 @@ private fun SeaflowScreen(context: Context) {
                         Button(onClick = {
                             val host = pairedHost
                             val cert = preferences.getString("paired_tv_certificate", null)
-                            if (host == null || cert == null) remoteStatus = "Pair this TV again to save its certificate."
-                            else executor.execute {
-                                try {
-                                    val client = TvRemoteClient(context, host, Base64.getDecoder().decode(cert)) { message -> mainHandler.post { remoteStatus = message } }
-                                    mainHandler.post { remoteClient?.close(); remoteClient = client; remoteStatus = "Remote connected"; stage = "remote" }
-                                } catch (error: Exception) { mainHandler.post { remoteStatus = error.localizedMessage ?: "Remote connection failed." } }
+                            if (host == null || cert == null) {
+                                remoteStatus = "Pair this TV again to save its certificate."
+                            } else {
+                                preferences.edit().putString("tv_nickname", tvNickname.ifBlank { "My TV" }).apply()
+                                remoteStatus = "Connecting securely to $tvNickname…"
+                                executor.execute {
+                                    try {
+                                        val client = TvRemoteClient(context.applicationContext, host, Base64.getDecoder().decode(cert)) { message ->
+                                            mainHandler.post { remoteStatus = message }
+                                        }
+                                        mainHandler.post {
+                                            remoteClient?.close()
+                                            remoteClient = client
+                                            remoteStatus = "Remote connected"
+                                            stage = "remote"
+                                        }
+                                    } catch (error: Exception) {
+                                        mainHandler.post { remoteStatus = error.localizedMessage ?: "Remote connection failed." }
+                                    }
+                                }
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text("Open remote control") }
                         Text(remoteStatus, color = muted)
                         OutlinedButton(onClick = { stage = "discover" }, modifier = Modifier.fillMaxWidth()) { Text("Add another TV") }
+                        TextButton(onClick = {
+                            remoteClient?.close()
+                            remoteClient = null
+                            preferences.edit().clear().apply()
+                            pairedName = null
+                            pairedHost = null
+                            tvNickname = "Nexa"
+                            stage = "welcome"
+                            remoteStatus = "Saved TV removed from this phone."
+                        }) { Text("Forget this TV") }
                     }
                     "remote" -> {
                         val client = remoteClient
