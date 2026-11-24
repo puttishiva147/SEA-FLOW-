@@ -29,7 +29,7 @@ private fun SeaflowScreen(context: Context) {
     var status by remember { mutableStateOf("Ready to scan your local Wi-Fi network") }
     var devices by remember { mutableStateOf(listOf<TvCandidate>()) }
     val nsd = remember { context.getSystemService(Context.NSD_SERVICE) as NsdManager }
-    val serviceTypes = listOf("_androidtvremote2._tcp.", "_googlecast._tcp.")
+    val serviceTypes = listOf("_androidtvremote2._tcp.")
 
     fun scan() {
         devices = emptyList()
@@ -86,7 +86,7 @@ private fun SeaflowScreen(context: Context) {
                                     Text(device.name, style = MaterialTheme.typography.titleMedium)
                                     Text("${device.host}:${device.port}")
                                     Text(device.service, style = MaterialTheme.typography.bodySmall)
-                                    Text("Discovered only — pairing and command support are not yet verified.", style = MaterialTheme.typography.bodySmall)
+                                    Text("Android TV Remote service found. Next: secure PIN pairing on port 6467.", style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
