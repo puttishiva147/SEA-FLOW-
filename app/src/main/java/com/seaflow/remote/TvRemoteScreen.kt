@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +36,14 @@ internal fun TvRemoteScreen(
     var commandStatus by remember { mutableStateOf("Ready") }
     var website by remember { mutableStateOf("") }
     var tvText by remember { mutableStateOf("") }
+    fun runRemoteAction(success: String, action: () -> Unit) {
+        try {
+            action()
+            commandStatus = success
+        } catch (error: Exception) {
+            commandStatus = error.localizedMessage ?: "The TV connection was lost. Reconnect and try again."
+        }
+    }
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val phrase = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty()
         if (phrase.isNotBlank()) {
@@ -73,7 +83,7 @@ internal fun TvRemoteScreen(
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column {
                 Text(nickname, style = MaterialTheme.typography.headlineMedium)
@@ -84,32 +94,32 @@ internal fun TvRemoteScreen(
         Card {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    Button(onClick = { client.press(19) }) { Text("▲") }
+                    Button(onClick = { runRemoteAction("Up", { client.press(19) }) }) { Text("▲") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Button(onClick = { client.press(21) }) { Text("◀") }
-                    Button(onClick = { client.press(23) }) { Text("OK") }
-                    Button(onClick = { client.press(22) }) { Text("▶") }
+                    Button(onClick = { runRemoteAction("Left", { client.press(21) }) }) { Text("◀") }
+                    Button(onClick = { runRemoteAction("Select", { client.press(23) }) }) { Text("OK") }
+                    Button(onClick = { runRemoteAction("Right", { client.press(22) }) }) { Text("▶") }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    Button(onClick = { client.press(20) }) { Text("▼") }
+                    Button(onClick = { runRemoteAction("Down", { client.press(20) }) }) { Text("▼") }
                 }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            OutlinedButton(onClick = { client.press(4) }) { Text("Back") }
-            OutlinedButton(onClick = { client.press(3) }) { Text("Home") }
-            OutlinedButton(onClick = { client.press(82) }) { Text("Menu") }
+            OutlinedButton(onClick = { runRemoteAction("Back", { client.press(4) }) }) { Text("Back") }
+            OutlinedButton(onClick = { runRemoteAction("Home", { client.press(3) }) }) { Text("Home") }
+            OutlinedButton(onClick = { runRemoteAction("Menu", { client.press(82) }) }) { Text("Menu") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            OutlinedButton(onClick = { client.press(177) }) { Text("Power") }
-            Button(onClick = { client.press(24) }) { Text("Vol +") }
-            Button(onClick = { client.press(25) }) { Text("Vol −") }
-            Button(onClick = { client.press(164) }) { Text("Mute") }
+            OutlinedButton(onClick = { runRemoteAction("Power command sent (TV support varies)", { client.press(177) }) }) { Text("Power") }
+            Button(onClick = { runRemoteAction("Volume up", { client.press(24) }) }) { Text("Vol +") }
+            Button(onClick = { runRemoteAction("Volume down", { client.press(25) }) }) { Text("Vol −") }
+            Button(onClick = { runRemoteAction("Mute", { client.press(164) }) }) { Text("Mute") }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { client.launchAppLink("https://www.youtube.com") }, modifier = Modifier.weight(1f)) { Text("YouTube") }
-            Button(onClick = { client.launchAppLink("https://music.youtube.com") }, modifier = Modifier.weight(1f)) { Text("Music") }
+            Button(onClick = { runRemoteAction("Opening YouTube", { client.launchAppLink("https://www.youtube.com") }) }, modifier = Modifier.weight(1f)) { Text("YouTube") }
+            Button(onClick = { runRemoteAction("Opening YouTube Music", { client.launchAppLink("https://music.youtube.com") }) }, modifier = Modifier.weight(1f)) { Text("Music") }
         }
         TextField(value = tvText, onValueChange = { tvText = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Type into the focused TV field") }, singleLine = true)
         OutlinedButton(onClick = {
