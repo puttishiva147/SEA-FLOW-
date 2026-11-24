@@ -15,12 +15,12 @@ Local control does not require a SEAFLOW cloud backend. Voice recognition and AI
 
 ## Current implementation
 - Native Android app foundation using Kotlin and Jetpack Compose.
-- Bounded mDNS discovery for `_androidtvremote2._tcp`, with a multicast lock and cleanup.
+- Bounded mDNS discovery for `_androidtvremote2._tcp`, with a multicast lock, cleanup, and a manual IP/host fallback.
 - Android TV Remote v2 pairing transport over TLS on port 6467.
 - Client RSA identity generated and retained by Android Keystore.
 - Protobuf varint framing and pairing request/options/configuration messages.
 - Six-character hexadecimal TV code verification using both RSA public keys and SHA-256.
-- Unit tests for protobuf varint framing and nested field parsing.
+- Unit tests for protobuf varint framing, nested field parsing, and pairing-code checksum validation.
 
 **Validation status:** source changes are committed, but a successful CI build and a pairing test against a physical TV have not yet been confirmed. Discovery and pairing support only work on TVs that expose Android TV Remote v2; the resolved mDNS port is not used as the pairing port.
 
