@@ -39,6 +39,7 @@ import com.seaflow.remote.protocol.TvRemoteClient
 import java.net.URLEncoder
 
 @Composable
+@Suppress("DEPRECATION")
 internal fun TvRemoteScreen(
     nickname: String,
     client: TvRemoteClient,
@@ -164,8 +165,11 @@ internal fun TvRemoteScreen(
             addAction(VoiceListeningService.ACTION_ACTION)
             addAction(VoiceListeningService.ACTION_UNMAPPED)
         }
-        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        else @Suppress("DEPRECATION") context.registerReceiver(receiver, filter)
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
         onDispose { try { context.unregisterReceiver(receiver) } catch (_: Exception) { } }
     }
 
