@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.seaflow.remote.protocol.TvPairingClient
+import com.seaflow.remote.protocol.TvRemoteClient
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Base64
@@ -172,6 +173,9 @@ private class TvDiscoveryController(
 @Composable
 private fun SeaflowScreen(context: Context) {
     var stage by remember { mutableStateOf("welcome") }
+    var remoteClient by remember { mutableStateOf<TvRemoteClient?>(null) }
+    var tvNickname by remember { mutableStateOf("Nexa") }
+    var remoteStatus by remember { mutableStateOf("Not connected") }
     var scanning by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Ready to find your TV") }
     var devices by remember { mutableStateOf(emptyList<TvCandidate>()) }
@@ -196,7 +200,7 @@ private fun SeaflowScreen(context: Context) {
         }
     }
     DisposableEffect(controller) {
-        onDispose { controller.close(); sessionRef.getAndSet(null)?.close(); executor.shutdownNow() }
+        onDispose { controller.close(); sessionRef.getAndSet(null)?.close(); remoteClient?.close(); executor.shutdownNow() }
     }
 
     fun beginPairing(hostValue: String, displayName: String) {
@@ -356,17 +360,34 @@ private fun SeaflowScreen(context: Context) {
                         TextButton(onClick = { pairingSession?.close(); pairingSession = null; sessionRef.set(null); pairingPin = ""; stage = "discover"; pairingStatus = "Pairing cancelled." }) { Text("Back to device list") }
                     }
                     "connected" -> {
-                        Text("You're connected.", style = MaterialTheme.typography.headlineMedium)
-                        Text("SEAFLOW pairing is saved on this phone.", color = muted)
+                        Text("TV paired", style = MaterialTheme.typography.headlineMedium)
+                        Text("Give your TV a voice nickname.", color = muted)
+                        TextField(value = tvNickname, onValueChange = { tvNickname = it.take(24) }, modifier = Modifier.fillMaxWidth(), label = { Text("TV nickname") }, singleLine = true)
                         Card(colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = panel)) {
                             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("PAIRED TELEVISION", color = cyan, style = MaterialTheme.typography.labelMedium)
                                 Text(pairedName ?: "Your TV", style = MaterialTheme.typography.titleLarge)
                                 Text(pairedHost ?: "", color = muted)
-                                Text("Secure pairing completed. Remote commands are not enabled in this build yet.", color = muted, style = MaterialTheme.typography.bodySmall)
+                                Text("Nickname: $tvNickname", color = muted)
                             }
                         }
-                        Button(onClick = { stage = "discover" }, modifier = Modifier.fillMaxWidth()) { Text("Add another TV") }
+                        Button(onClick = {
+                            val host = pairedHost
+                            val cert = preferences.getString("paired_tv_certificate", null)
+                            if (host == null || cert == null) remoteStatus = "Pair this TV again to save its certificate."
+                            else executor.execute {
+                                try {
+                                    val client = TvRemoteClient(context, host, Base64.getDecoder().decode(cert)) { message -> mainHandler.post { remoteStatus = message } }
+                                    mainHandler.post { remoteClient?.close(); remoteClient = client; remoteStatus = "Remote connected"; stage = "remote" }
+                                } catch (error: Exception) { mainHandler.post { remoteStatus = error.localizedMessage ?: "Remote connection failed." } }
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Open remote control") }
+                        Text(remoteStatus, color = muted)
+                        OutlinedButton(onClick = { stage = "discover" }, modifier = Modifier.fillMaxWidth()) { Text("Add another TV") }
+                    }
+                    "remote" -> {
+                        val client = remoteClient
+                        if (client != null) TvRemoteScreen(tvNickname, client, remoteStatus) { client.close(); remoteClient = null; stage = "connected" }
+                        else Text("Remote disconnected. Reconnect from the paired TV screen.")
                     }
                 }
             }
