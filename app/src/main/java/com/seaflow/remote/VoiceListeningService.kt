@@ -23,6 +23,7 @@ class VoiceListeningService : Service(), RecognitionListener {
     private var remote: TvRemoteClient? = null
     private var listening = false
     private var restarting = false
+    private var speaking = false
     private var nickname = "Nexa"
     private var speaker: TextToSpeech? = null
 
@@ -34,9 +35,9 @@ class VoiceListeningService : Service(), RecognitionListener {
                 speaker?.language = Locale.getDefault()
                 speaker?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) = Unit
-                    override fun onDone(id: String?) { scheduleRestart() }
+                    override fun onDone(id: String?) { speaking = false; scheduleRestart() }
                     @Deprecated("Deprecated in Android API")
-                    override fun onError(id: String?) { scheduleRestart() }
+                    override fun onError(id: String?) { speaking = false; scheduleRestart() }
                 })
             }
         }
@@ -181,8 +182,7 @@ class VoiceListeningService : Service(), RecognitionListener {
 
     private fun speak(message: String) {
         val engine = speaker ?: return
-        listening = false
-        try { recognizer?.cancel() } catch (_: Exception) { }
+        speaking = true
         engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, "seaflow-" + System.nanoTime())
     }
 
@@ -197,7 +197,7 @@ class VoiceListeningService : Service(), RecognitionListener {
         scheduleRestart()
     }
     private fun scheduleRestart() {
-        if (restarting) return
+        if (restarting || speaking) return
         restarting = true
         android.os.Handler(mainLooper).postDelayed({
             restarting = false
