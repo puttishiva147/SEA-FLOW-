@@ -101,7 +101,12 @@ class VoiceListeningService : Service(), RecognitionListener {
             emit(ACTION_ERROR, "Voice heard, but the background TV control channel is not connected.")
             return
         }
-        val command = phrase.trim().replace(Regex("(?i)^" + Regex.escape(nickname) + "[, ]*"), "").lowercase()
+        val spoken = phrase.trim()
+        if (!spoken.startsWith(nickname, ignoreCase = true)) {
+            emit(ACTION_UNMAPPED, "Ignored without wake word '$nickname': $phrase")
+            return
+        }
+        val command = spoken.replace(Regex("(?i)^" + Regex.escape(nickname) + "[, ]*"), "").lowercase()
         emit(ACTION_UNDERSTOOD, command)
         try {
             val action = when {
@@ -109,6 +114,13 @@ class VoiceListeningService : Service(), RecognitionListener {
                     target.launchAppLink("https://music.youtube.com/search?q=random%20music"); "Opening YouTube Music"
                 }
                 command.contains("open youtube") -> { target.launchAppLink("https://www.youtube.com"); "Opening YouTube" }
+                command.contains("open google") -> { target.launchAppLink("https://www.google.com"); "Opening Google" }
+                command.contains("open browser") || command.contains("open website") -> {
+                    val url = Regex("(?i)(?:https?://)?(?:www\\\\.)?[a-z0-9-]+\\\\.[a-z]{2,}(?:/[^\\\\s]*)?").find(command)?.value
+                        ?: throw IllegalArgumentException("Say the website address after open browser.")
+                    target.launchAppLink(if (url.startsWith("http")) url else "https://$url")
+                    "Opening $url"
+                }
                 command.contains("open chatgpt") || command.contains("open chat gpt") -> {
                     target.launchAppLink("https://chatgpt.com/"); "Opening ChatGPT"
                 }
@@ -118,6 +130,8 @@ class VoiceListeningService : Service(), RecognitionListener {
                 command.contains("search") || command.contains("google") -> {
                     target.launchAppLink("https://www.google.com/search?q=" + URLEncoder.encode(command, "UTF-8")); "Searching Google on TV"
                 }
+                command.contains("wake tv") || command.contains("wake screen") || command.contains("exit screen saver") -> { target.press(3); "Sending Home to wake or exit screen saver" }
+                command.contains("open settings") -> { target.press(176); "Opening TV settings (if supported)" }
                 command.contains("volume up") -> { target.press(24); "Volume up" }
                 command.contains("volume down") -> { target.press(25); "Volume down" }
                 command.contains("mute") -> { target.press(164); "Mute" }
