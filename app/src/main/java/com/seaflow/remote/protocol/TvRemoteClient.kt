@@ -66,7 +66,7 @@ internal class TvRemoteClient(
         if (activeFrame.none { it.number == 2 }) {
             throw IllegalStateException("TV did not activate the remote session.")
         }
-        write(ProtoWire.uint(1, supportedFeatures))
+        write(ProtoWire.message(2, ProtoWire.uint(1, supportedFeatures)))
         onStatus("Remote channel ready. TV capabilities: " + featureSummary(supportedFeatures))
     }
 
