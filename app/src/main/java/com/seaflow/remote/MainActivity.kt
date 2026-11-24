@@ -173,6 +173,9 @@ private fun SeaflowScreen(context: Context) {
     var devices by remember { mutableStateOf(emptyList<TvCandidate>()) }
     var pairingStatus by remember { mutableStateOf("Not paired") }
     var pairingPin by remember { mutableStateOf("") }
+    var manualHost by remember { mutableStateOf("") }
+    var pendingTvName by remember { mutableStateOf("") }
+    var pendingTvHost by remember { mutableStateOf("") }
     var pairingBusy by remember { mutableStateOf(false) }
     var awaitingPin by remember { mutableStateOf(false) }
     val pairingPreferences = remember(context) { context.getSharedPreferences("seaflow_tv_pairing", Context.MODE_PRIVATE) }
@@ -192,6 +195,40 @@ private fun SeaflowScreen(context: Context) {
     }
     DisposableEffect(controller) {
         onDispose { controller.close(); pairingSessionRef.getAndSet(null)?.close(); executor.shutdownNow() }
+    }
+
+    fun beginPairing(hostValue: String, displayName: String) {
+        val host = hostValue.trim()
+        if (host.isBlank() || host.any { it.isWhitespace() }) {
+            pairingStatus = "Enter a valid TV IP address or host name."
+            return
+        }
+        pairingSession?.close()
+        pairingSession = null
+        pairingSessionRef.set(null)
+        awaitingPin = false
+        pairingBusy = true
+        pendingTvName = displayName
+        pendingTvHost = host
+        pairingStatus = "Opening encrypted pairing connection to $displayName…"
+        executor.execute {
+            try {
+                val session = TvPairingClient(context).begin(host)
+                mainHandler.post {
+                    pairingSession = session
+                    pairingSessionRef.set(session)
+                    pairingBusy = false
+                    awaitingPin = true
+                    pairingPin = ""
+                    pairingStatus = "Connection established. Check your TV screen for its six-character pairing code."
+                }
+            } catch (error: Exception) {
+                mainHandler.post {
+                    pairingBusy = false
+                    pairingStatus = "Could not start secure pairing: ${error.localizedMessage ?: "connection failed"}"
+                }
+            }
+        }
     }
 
     MaterialTheme {
@@ -231,7 +268,7 @@ private fun SeaflowScreen(context: Context) {
                             executor.execute {
                                 try {
                                     session.finish(enteredPin)
-                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairingSessionRef.set(null); pairedName = device.name; pairedHost = device.host; pairingPreferences.edit().putString("paired_tv_name", device.name).putString("paired_tv_host", device.host).apply(); pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
+                                    mainHandler.post { pairingBusy = false; awaitingPin = false; pairingSession = null; pairingSessionRef.set(null); pairedName = pendingTvName; pairedHost = pendingTvHost; pairingPreferences.edit().putString("paired_tv_name", pendingTvName).putString("paired_tv_host", pendingTvHost).apply(); pairingStatus = "Secure pairing completed successfully."; pairingPin = "" }
                                 } catch (error: Exception) {
                                     mainHandler.post { pairingBusy = false; pairingStatus = error.localizedMessage ?: "Pairing failed." }
                                 }
@@ -240,7 +277,9 @@ private fun SeaflowScreen(context: Context) {
                     }, enabled = !pairingBusy && pairingPin.length == 6) { Text(if (pairingBusy) "Pairing…" else "Confirm code") }
                     OutlinedButton(onClick = { pairingSession?.close(); pairingSession = null; pairingSessionRef.set(null); awaitingPin = false; pairingStatus = "Pairing cancelled."; pairingPin = "" }, enabled = !pairingBusy) { Text("Cancel pairing") }
                 }
-                pairedName?.let { Text("Saved pairing: $it ($pairedHost). Reuse of this identity is retained in Android Keystore.", style = MaterialTheme.typography.titleMedium) }
+                pairedName?.let { Text("Saved pairing: $it ($pairedHost). Client identity is retained in Android Keystore.", style = MaterialTheme.typography.titleMedium) }
+                TextField(value = manualHost, onValueChange = { manualHost = it.take(120) }, label = { Text("TV IP address or host name") }, singleLine = true)
+                OutlinedButton(onClick = { beginPairing(manualHost, manualHost) }, enabled = manualHost.isNotBlank() && !pairingBusy && !awaitingPin) { Text("Pair by address") }
                 Text("Discovered devices: ${devices.size}", style = MaterialTheme.typography.titleMedium)
                 if (devices.isEmpty()) {
                     Text(
@@ -259,32 +298,7 @@ private fun SeaflowScreen(context: Context) {
                                     Text("${device.host}:${device.port}")
                                     Text(device.service, style = MaterialTheme.typography.bodySmall)
                                     Text("Android TV Remote v2 service discovered.", style = MaterialTheme.typography.bodySmall)
-                                    Button(onClick = {
-                                        pairingSession?.close()
-                                        pairingSession = null
-                                        pairingSessionRef.set(null)
-                                        awaitingPin = false
-                                        pairingBusy = true
-                                        pairingStatus = "Opening encrypted pairing connection to ${device.name}…"
-                                        executor.execute {
-                                            try {
-                                                val session = TvPairingClient(context).begin(device.host)
-                                                mainHandler.post {
-                                                    pairingSession = session
-                                                    pairingSessionRef.set(session)
-                                                    pairingBusy = false
-                                                    awaitingPin = true
-                                                    pairingPin = ""
-                                                    pairingStatus = "Connection established. Check your TV screen for its six-character pairing code."
-                                                }
-                                            } catch (error: Exception) {
-                                                mainHandler.post {
-                                                    pairingBusy = false
-                                                    pairingStatus = "Could not start secure pairing: ${error.localizedMessage ?: "connection failed"}"
-                                                }
-                                            }
-                                        }
-                                    }, enabled = !pairingBusy && !awaitingPin) { Text("Pair this TV") }
+                                    Button(onClick = { beginPairing(device.host, device.name) }, enabled = !pairingBusy && !awaitingPin) { Text("Pair this TV") }
                                 }
                             }
                         }
